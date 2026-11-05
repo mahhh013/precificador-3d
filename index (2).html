@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Precificador de impressão 3D: envie a foto da peça e um fundo modelo e gere a imagem com preço e medidas.">
+<title>Precificador de Impressão 3D</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --txt:#1b1f27; --muted:#6b7280; --line:#e2e5ea; --accent:#ff6a1a; --accent-d:#d9530a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14161a; --card:#1e2127; --txt:#f1f3f6; --muted:#9aa3b0; --line:#2d3139; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  header { padding:20px 24px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { margin:0; font-size:1.25rem; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:.9rem; }
+  main { display:grid; gap:20px; padding:20px; max-width:1150px; margin:0 auto; grid-template-columns:1fr; }
+  @media (min-width:900px){ main { grid-template-columns:430px 1fr; align-items:start; } .sticky { position:sticky; top:16px; } }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .panel h2 { margin:0 0 12px; font-size:1rem; }
+  label.campo { display:block; font-size:.8rem; color:var(--muted); margin:12px 0 4px; }
+  input[type=text], input[type=number], select { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:.95rem; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  input[type=color] { width:100%; height:40px; border:1px solid var(--line); border-radius:8px; background:var(--bg); padding:2px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  /* O <input type=file> fica DENTRO do label: o toque sempre abre a galeria/câmera */
+  .drop { position:relative; display:block; border:2px dashed var(--line); border-radius:10px; padding:16px; text-align:center; cursor:pointer; color:var(--muted); font-size:.9rem; }
+  .drop.has { border-color:var(--accent); color:var(--txt); }
+  .drop input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .erro { color:#d93025; font-size:.8rem; margin-top:6px; min-height:1em; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:.9rem; }
+  details { margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
+  summary { cursor:pointer; font-weight:600; font-size:.9rem; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:12px 16px; font-size:.95rem; font-weight:600; cursor:pointer; }
+  button:hover { background:var(--accent-d); }
+  button.sec { background:transparent; color:var(--txt); border:1px solid var(--line); }
+  button.mini { padding:6px 10px; font-size:.8rem; margin-top:8px; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+  .breakdown { font-size:.85rem; margin-top:12px; }
+  .breakdown div { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed var(--line); }
+  .breakdown .total { font-weight:700; font-size:1rem; color:var(--accent); border:0; }
+  canvas { width:100%; height:auto; border-radius:10px; background:var(--bg); display:block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🖨️ Precificador de Impressão 3D</h1>
+  <p>Envie a foto da peça e o fundo modelo, informe tempo, filamento e medidas, e gere a imagem com o valor.</p>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Dados da peça</h2>
+
+    <label class="campo">1) Foto da peça</label>
+    <label class="drop" id="dropFoto"><span id="txtFoto">📷 Toque ou clique para escolher a foto</span><input type="file" id="foto" accept="image/*"></label>
+    <div class="erro" id="erroFoto"></div>
+
+    <label class="campo">2) Fundo modelo (sua imagem de fundo)</label>
+    <label class="drop" id="dropFundo"><span id="txtFundo">🖼️ Toque ou clique para enviar o fundo</span><input type="file" id="fundo" accept="image/*"></label>
+    <button class="sec mini" id="btnFundoPadrao" type="button">Usar fundo padrão</button>
+    <div class="erro" id="erroFundo"></div>
+
+    <label class="campo">Formato da imagem</label>
+    <select id="formato">
+      <option value="ret">Retrato 4:5 (1080×1350)</option>
+      <option value="quad">Quadrado 1:1 (1080×1080)</option>
+    </select>
+
+    <div class="row">
+      <div><label class="campo">Tempo (horas)</label><input type="number" id="horas" min="0" step="1" value="2"></div>
+      <div><label class="campo">Tempo (minutos)</label><input type="number" id="minutos" min="0" max="59" step="1" value="30"></div>
+    </div>
+    <label class="campo">Filamento usado (gramas)</label>
+    <input type="number" id="gramas" min="0" step="0.1" value="50">
+
+    <div class="row3">
+      <div><label class="campo">Altura (mm)</label><input type="number" id="altura" min="0" step="0.1" value="80"></div>
+      <div><label class="campo">Comprimento (mm)</label><input type="number" id="comprimento" min="0" step="0.1" value="120"></div>
+      <div><label class="campo">Espessura (mm)</label><input type="number" id="espessura" min="0" step="0.1" value="25"></div>
+    </div>
+
+    <details>
+      <summary>🎯 Ajustar posição da foto no fundo</summary>
+      <label class="campo">Tamanho da foto</label><input type="range" id="escala" min="20" max="100" value="100">
+      <label class="campo">Posição horizontal</label><input type="range" id="posx" min="-40" max="40" value="0">
+      <label class="campo">Posição vertical</label><input type="range" id="posy" min="-40" max="40" value="0">
+      <label class="check"><input type="checkbox" id="moldura" checked> Moldura branca na foto</label>
+      <label class="campo">Cor do selo de preço</label><input type="color" id="cor" value="#2a2d33">
+    </details>
+
+    <details>
+      <summary>⚙️ Custos e margem (editável)</summary>
+      <div class="row">
+        <div><label class="campo">Filamento (R$/kg)</label><input type="number" id="precoKg" step="0.01" value="120"></div>
+        <div><label class="campo">Energia (R$/kWh)</label><input type="number" id="kwh" step="0.01" value="0.95"></div>
+      </div>
+      <div class="row">
+        <div><label class="campo">Potência impressora (W)</label><input type="number" id="watts" value="150"></div>
+        <div><label class="campo">Desgaste máquina (R$/h)</label><input type="number" id="desgaste" step="0.01" value="1.50"></div>
+      </div>
+      <div class="row3">
+        <div><label class="campo">Mão de obra (R$)</label><input type="number" id="maoObra" step="0.01" value="5"></div>
+        <div><label class="campo">Falhas (%)</label><input type="number" id="falhas" value="10"></div>
+        <div><label class="campo">Lucro (%)</label><input type="number" id="lucro" value="100"></div>
+      </div>
+    </details>
+
+    <div class="breakdown" id="resumo"></div>
+  </section>
+
+  <section class="panel sticky">
+    <h2>Prévia</h2>
+    <canvas id="cv" width="1080" height="1350"></canvas>
+    <div class="actions">
+      <button id="btnBaixar">⬇️ Baixar (PNG)</button>
+      <button id="btnEnviar">📤 Enviar / compartilhar</button>
+      <button class="sec" id="btnCopiar">📋 Copiar</button>
+    </div>
+    <div class="erro" id="aviso"></div>
+  </section>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const brl = v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+  const mm  = v => (+v || 0).toLocaleString('pt-BR', { maximumFractionDigits:1 }) + ' mm';
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  let foto = null, fundo = null;
+
+  /* Configurações salvas no navegador (try/catch: pode não estar disponível) */
+  const salvos = ['precoKg','kwh','watts','desgaste','maoObra','falhas','lucro','formato','cor'];
+  try {
+    salvos.forEach(k => { const v = localStorage.getItem('p3d_' + k); if (v !== null) $(k).value = v; });
+    const sv = localStorage.getItem('p3d_fundo');   // fundo modelo salvo (versão reduzida)
+    if (sv) { const im = new Image(); im.onload = () => { fundo = im; marcarFundo('fundo salvo'); desenhar(); }; im.src = sv; }
+  } catch (e) {}
+
+  /* ===== Preço ===== */
+  function calcular() {
+    const h = (+$('horas').value || 0) + (+$('minutos').value || 0) / 60;
+    const filamento = (+$('gramas').value || 0) * (+$('precoKg').value || 0) / 1000;
+    const energia = h * ((+$('watts').value || 0) / 1000) * (+$('kwh').value || 0);
+    const desgaste = h * (+$('desgaste').value || 0);
+    const mao = +$('maoObra').value || 0;
+    const base = filamento + energia + desgaste + mao;
+    const falhas = base * (+$('falhas').value || 0) / 100;
+    const custo = base + falhas, lucro = custo * (+$('lucro').value || 0) / 100;
+    return { filamento, energia, desgaste, mao, falhas, custo, lucro, total: custo + lucro };
+  }
+  function atualizarResumo(r) {
+    const l = [['Filamento',r.filamento],['Energia',r.energia],['Desgaste da máquina',r.desgaste],['Mão de obra',r.mao],['Margem p/ falhas',r.falhas],['Custo total',r.custo],['Lucro',r.lucro]];
+    $('resumo').innerHTML = l.map(([n,v]) => `<div><span>${n}</span><span>${brl(v)}</span></div>`).join('')
+      + `<div class="total"><span>PREÇO FINAL</span><span>${brl(r.total)}</span></div>`;
+  }
+
+  /* ===== Desenho ===== */
+  function arredondado(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+  }
+  function textoClaro(hex) {   // escolhe branco ou preto conforme a cor do selo
+    const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    return (0.299*r + 0.587*g + 0.114*b) > 150 ? '#1b1f27' : '#ffffff';
+  }
+
+  // Fundo padrão (usado enquanto você não enviar o seu): estúdio claro com sombras de janela
+  function fundoPadrao(W, H) {
+    const hz = H * 0.62;
+    let g = ctx.createLinearGradient(0, 0, 0, hz); g.addColorStop(0, '#e9ebee'); g.addColorStop(1, '#f6f7f8');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, hz);
+    g = ctx.createLinearGradient(0, hz, 0, H); g.addColorStop(0, '#e3e5e8'); g.addColorStop(1, '#fbfbfc');
+    ctx.fillStyle = g; ctx.fillRect(0, hz, W, H - hz);
+    ctx.save(); if ('filter' in ctx) ctx.filter = 'blur(14px)'; ctx.fillStyle = 'rgba(40,50,70,.07)';
+    [[-80,120],[150,70],[330,170],[640,90]].forEach(([y,w]) => {
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y+W*.38); ctx.lineTo(W,y+W*.38+w); ctx.lineTo(0,y+w); ctx.closePath(); ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function desenhar() {
+    const r = calcular(); atualizarResumo(r);
+    const W = 1080, H = $('formato').value === 'quad' ? 1080 : 1350;
+    if (cv.height !== H) cv.height = H;
+    ctx.clearRect(0, 0, W, H);
+
+    // Fundo modelo (preenche o quadro) ou fundo padrão
+    if (fundo) {
+      const s = Math.max(W / fundo.width, H / fundo.height), w = fundo.width * s, h = fundo.height * s;
+      ctx.drawImage(fundo, (W - w) / 2, (H - h) / 2, w, h);
+    } else fundoPadrao(W, H);
+
+    // Áreas: informações embaixo, foto no espaço restante
+    const m = 40, priceH = 110, boxH = 96, gap = 14;
+    const priceY = H - m - priceH, boxY = priceY - gap - boxH;
+    const aX = 70, aY = 70, aW = W - 140, aH = boxY - 30 - aY;
+
+    // Foto da peça (inteira, sem cortes), com tamanho e posição ajustáveis
+    const sc = (+$('escala').value || 100) / 100;
+    let pw, ph;
+    if (foto) { const s = Math.min(aW / foto.width, aH / foto.height) * sc; pw = foto.width * s; ph = foto.height * s; }
+    else { pw = aW * sc; ph = aH * sc * .8; }
+    const px = aX + (aW - pw) / 2 + (+$('posx').value || 0) / 100 * W;
+    const py = aY + (aH - ph) / 2 + (+$('posy').value || 0) / 100 * H;
+    const moldura = $('moldura').checked;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.30)'; ctx.shadowBlur = 36; ctx.shadowOffsetY = 14;
+    if (moldura) { ctx.fillStyle = '#fff'; arredondado(px-10, py-10, pw+20, ph+20, 30); ctx.fill(); }
+    else if (foto) ctx.drawImage(foto, px, py, pw, ph);
+    ctx.restore();
+    if (moldura || !foto) {
+      ctx.save(); arredondado(px, py, pw, ph, moldura ? 22 : 0); ctx.clip();
+      if (foto) ctx.drawImage(foto, px, py, pw, ph);
+      else { ctx.fillStyle = '#e8eaee'; ctx.fillRect(px, py, pw, ph); ctx.fillStyle = '#8a93a1'; ctx.font = '600 44px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Envie a foto da peça', px + pw/2, py + ph/2); }
+      ctx.restore();
+    }
+
+    // Medidas
+    const med = [['ALTURA',$('altura').value],['COMPRIMENTO',$('comprimento').value],['ESPESSURA',$('espessura').value]];
+    const g2 = 16, bw = (W - 120 - g2 * 2) / 3;
+    med.forEach(([rot, val], i) => {
+      const x = 60 + i * (bw + g2);
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.18)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+      ctx.fillStyle = 'rgba(255,255,255,.88)'; arredondado(x, boxY, bw, boxH, 20); ctx.fill(); ctx.restore();
+      ctx.textAlign = 'center'; ctx.fillStyle = '#6b7280'; ctx.font = '600 22px system-ui, sans-serif'; ctx.fillText(rot, x + bw/2, boxY + 34);
+      ctx.fillStyle = '#1b1f27'; ctx.font = '800 38px system-ui, sans-serif'; ctx.fillText(mm(val), x + bw/2, boxY + 76);
+    });
+
+    // Selo de preço
+    const preco = brl(r.total), cor = $('cor').value;
+    ctx.font = '900 88px system-ui, sans-serif';
+    const bwp = ctx.measureText(preco).width + 100;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 10;
+    ctx.fillStyle = cor; arredondado((W - bwp) / 2, priceY, bwp, priceH, 30); ctx.fill(); ctx.restore();
+    ctx.textAlign = 'center'; ctx.fillStyle = textoClaro(cor); ctx.fillText(preco, W / 2, priceY + 82);
+  }
+
+  /* ===== Envio de imagens (FileReader: funciona em celular e computador) ===== */
+  function lerImagem(file, ok, erro) {
+    const l = new FileReader();
+    l.onerror = () => erro('Não consegui ler o arquivo. Tente outra imagem.');
+    l.onload = () => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => erro('Formato não suportado. Use JPG, PNG ou WEBP (HEIC do iPhone: use "Mais compatível" na câmera).'); im.src = l.result; };
+    l.readAsDataURL(file);
+  }
+  function marcarFundo(txt) { $('txtFundo').textContent = '✅ ' + txt + ' (toque para trocar)'; $('dropFundo').classList.add('has'); }
+
+  $('foto').addEventListener('change', e => {
+    const f = e.target.files[0]; e.target.value = ''; $('erroFoto').textContent = ''; if (!f) return;
+    lerImagem(f, im => { foto = im; $('txtFoto').textContent = '✅ ' + f.name + ' (toque para trocar)'; $('dropFoto').classList.add('has'); desenhar(); }, m => $('erroFoto').textContent = m);
+  });
+  $('fundo').addEventListener('change', e => {
+    const f = e.target.files[0]; e.target.value = ''; $('erroFundo').textContent = ''; if (!f) return;
+    lerImagem(f, im => {
+      fundo = im; marcarFundo(f.name); desenhar();
+      try {   // guarda uma versão reduzida para não precisar reenviar na próxima vez
+        const s = Math.min(1, 1350 / Math.max(im.width, im.height)), t = document.createElement('canvas');
+        t.width = im.width * s; t.height = im.height * s; t.getContext('2d').drawImage(im, 0, 0, t.width, t.height);
+        localStorage.setItem('p3d_fundo', t.toDataURL('image/jpeg', .85));
+      } catch (e) {}
+    }, m => $('erroFundo').textContent = m);
+  });
+  $('btnFundoPadrao').onclick = () => {
+    fundo = null; try { localStorage.removeItem('p3d_fundo'); } catch (e) {}
+    $('txtFundo').textContent = '🖼️ Toque ou clique para enviar o fundo'; $('dropFundo').classList.remove('has'); desenhar();
+  };
+
+  document.querySelectorAll('input:not([type=file]), select').forEach(el => {
+    const ev = () => { try { if (salvos.includes(el.id)) localStorage.setItem('p3d_' + el.id, el.value); } catch (e) {} desenhar(); };
+    el.addEventListener('input', ev); el.addEventListener('change', ev);
+  });
+
+  /* ===== Baixar / enviar / copiar ===== */
+  const msg = t => { $('aviso').textContent = t; setTimeout(() => $('aviso').textContent = '', 4000); };
+  function baixar(b) { const a = document.createElement('a'); a.download = 'peca-3d.png'; a.href = URL.createObjectURL(b); a.click(); }
+  $('btnBaixar').onclick = () => cv.toBlob(baixar, 'image/png');
+  $('btnEnviar').onclick = () => cv.toBlob(async b => {
+    const f = new File([b], 'peca-3d.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) {
+      try { await navigator.share({ files: [f], title: 'Peça impressa em 3D' }); } catch (e) {}
+    } else { baixar(b); msg('Seu navegador não abre o compartilhamento; a imagem foi baixada para você enviar.'); }
+  }, 'image/png');
+  $('btnCopiar').onclick = () => cv.toBlob(async b => {
+    try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); msg('Imagem copiada!'); }
+    catch (e) { msg('Não foi possível copiar aqui. Use "Baixar".'); }
+  }, 'image/png');
+
+  desenhar();
+</script>
+</body>
+</html>
